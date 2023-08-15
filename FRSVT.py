@@ -2,6 +2,12 @@ import numpy as np
 from numpy.linalg import norm
 import time
 
+# seed
+np.random.seed(42)
+
+rng = np.random.default_rng(2023)  # Create a new random number generator instance
+#random_number = rng.random()  # Generate a random number
+
 def Polar(C):
     U, S, V = np.linalg.svd(C)
     W = np.dot(U, V.T)
@@ -35,14 +41,9 @@ def QR_CP(Y):
             
             temp = np.dot(Q[:, i].T, B[:, j]) * Q[:, i]
 
-            # reshape temp to (m, 1)
             temp = np.reshape(temp, (m, 1))
             
             bmax2 += temp
-            #print(bmax2.shape)
-            # bmax2 += np.dot(Q[:, i].T, B[:, j]) * Q[:, i]
-            #for i in range(j):
-            #bmax2 += np.outer(Q[:, i], np.squeeze(B[:, j]))
         
         bmax2 = np.reshape(B[:, j], (m,1)) - bmax2
         
@@ -84,17 +85,32 @@ def Helper(A, tau, l, p, Q):
     W, P = Polar(C)
     D, V = np.linalg.eig(P)
     D = np.diag(D)
-    X = np.dot(np.dot(Q, V), S_tau(D, tau))
-    X = np.dot(X, np.dot(np.dot(H, W), V).T)
+    S_D = np.dot(np.dot(Q, V), S_tau(D, tau))
+    X = np.dot(S_D, np.dot(np.dot(H, W), V).T)
     Q = np.dot(Q, V)
     return X, Q
+
+import numpy as np
 
 def PartialOrthogonalization(Q, Y):
     A = np.hstack((Q, Y))
     m, n = A.shape
+    #print(A.shape)
     for i in range(Q.shape[1], n):
+        count = 0
         while np.linalg.matrix_rank(A[:, :i]) != min(A[:, :i].shape):
-            A[:, i] = np.random.rand(m, 1)
+            count += 1
+            # print("Submatrix A[:, :{}]".format(i))
+            # print(A[:, :i].shape)
+            #print("Rank:", np.linalg.matrix_rank(A[:, :i-1]))
+            #A[:, i] = np.random.rand(m)
+            A[:, i] = rng.random(m)
+            
+            if count > 5:
+                break
+            
+            
+
     Q = A
     R = np.zeros((n, n))
     for i in range(n):
@@ -174,11 +190,6 @@ def TestSVD():
 
 # Call the test function
 TestSVD()
-
-A = cv2.imread('1.jpg', cv2.IMREAD_GRAYSCALE).astype(float)
-
-FRSVT(A)
-
 
 import numpy as np
 import logging
@@ -364,11 +375,13 @@ def quantum_inspired_FRSVT(A, tau=None, l=None, p=None):
 
     m, n = A.shape
     Y, rows, columns = sample_C(A, A.shape[0], A.shape[1], m, l, row_norms, LS_prob_rows, LS_prob_columns, A_Frobenius)
+    
     print(Y.shape)
     Q = QR_CP(Y)
     X, Q = Helper(A, tau, l, p, Q)
 
     Y, rows, columns = sample_C(A, A.shape[0], A.shape[1], m, p, row_norms, LS_prob_rows, LS_prob_columns, A_Frobenius)
+    
     Q = PartialOrthogonalization(Q, Y)
     X, Q = Helper(A, tau, l, p, Q)
 
@@ -380,5 +393,17 @@ def quantum_inspired_FRSVT(A, tau=None, l=None, p=None):
     plt.imshow(np.uint8(X), cmap='gray')
     # save
     plt.savefig('Inspired_Q.jpg')
+
     
-quantum_inspired_FRSVT(A)
+# A = cv2.imread('3.jpg', cv2.IMREAD_GRAYSCALE).astype(float)
+
+# FRSVT(A, l = 50, p = 20)
+
+# quantum_inspired_FRSVT(A, l = 50, p = 20)
+
+
+A = cv2.imread('1.jpg', cv2.IMREAD_GRAYSCALE).astype(float)
+
+FRSVT(A, l = 10, p = 10)
+
+quantum_inspired_FRSVT(A, l = 10, p = 10)
