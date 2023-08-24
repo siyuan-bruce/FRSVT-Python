@@ -27,6 +27,7 @@ def Polar(C):
     W = np.dot(U, V.T)
     # transform S into a diagonal matrix
     S = np.diag(S)
+    
     P = np.dot(np.dot(V, S), V.T)
     return W, P
 
@@ -84,11 +85,13 @@ def S_tau(D, tau):
     n = D.shape[0]
     S_D = np.zeros((n, n))
     for i in range(n):
-        S_D[i, i] = np.sign(D[i, i]) * max([abs(D[i, i] - tau), 0])
+        #print(D[i,i])
+        S_D[i, i] = np.sign(D[i, i]) * max([abs(D[i, i]) - tau, 0])
+        #print(S_D[i,i])
     return S_D
 
 def Helper(A, tau, l, p, Q):
-    for i in range(2):
+    for i in range(20):
         Q, R = np.linalg.qr(np.dot(A, np.dot(A.T, Q)))
         Q = Q[:, :R.shape[1]]
         R = R[:R.shape[1], :]
@@ -99,10 +102,14 @@ def Helper(A, tau, l, p, Q):
     W, P = Polar(C)
     D, V = np.linalg.eig(P)
     D = np.diag(D)
-    S_D = np.dot(np.dot(Q, V), S_tau(D, tau))
-    X = np.dot(S_D, np.dot(np.dot(H, W), V).T)
+    #print("tau", tau)
+    #print("D", np.diag(D))
+    S_D = S_tau(D, tau)
+    #print("S_D", np.diag(S_D))
+    X = np.dot(np.dot(Q, V), S_D)
+    X = np.dot(X, np.dot(np.dot(H, W), V).T)
     Q = np.dot(Q, V)
-    return X, Q, S_D
+    return X, Q, np.diag(S_D)
 
 import numpy as np
 
@@ -170,7 +177,7 @@ def FRSVT(A, tau=None, l=None, p=None):
     toc = time.time()
     print("Elapsed Time:", toc - tic)
 
-    return X
+    return X, D
     
 
 
@@ -355,9 +362,9 @@ def quantum_inspired_FRSVT(A, row_norms, LS_prob_rows, LS_prob_columns, A_Froben
     tic = time.time()
 
     m, n = A.shape
-    Y, rows, columns = sample_C(A, A.shape[0], A.shape[1], m, l, row_norms, LS_prob_rows, LS_prob_columns, A_Frobenius)
     
-    print(Y.shape)
+    print("l", l)
+    Y, rows, columns = sample_C(A, A.shape[0], A.shape[1], m, l, row_norms, LS_prob_rows, LS_prob_columns, A_Frobenius)
     
     Q = QR_CP(Y)
 
@@ -368,7 +375,8 @@ def quantum_inspired_FRSVT(A, row_norms, LS_prob_rows, LS_prob_columns, A_Froben
     Q = PartialOrthogonalization(Q, Y)
 
     X, Q, D = Helper(A, tau, l, p, Q)
-
+    
+    print("tau", tau)
     toc = time.time()
     print("Elapsed Time:", toc - tic)
 
@@ -504,9 +512,12 @@ def FRSVT_solve(A, r, c, rank, mask, delta = None, tau=None, max_iterations=1000
         rt_ls_prob = toc - tic
         
         if k == 0:
+            
             X = np.zeros_like(A)
+            
         else:
-            X =  FRSVT(Y,l = c, p = r)
+            
+            X, D = FRSVT(Y,l = c, p = r)
             
         Y += delta * mask * (A - X)
         
@@ -534,136 +545,6 @@ def FRSVT_solve(A, r, c, rank, mask, delta = None, tau=None, max_iterations=1000
     return X_output
 
 
-import numpy as np
-from scipy.sparse import spdiags
-
-def rSVDBKIr(A, k, i, Q=None):
-    s = 5
-    if Q is None:
-        m, n = A.shape
-        B = np.random.randn(n, k+s)
-        H = np.zeros((m, (k+s)*i))
-        H[:, :k+s], _ = np.linalg.lu(A @ B)
-        for j in range(2, i+1):
-            H[:, (k+s)*(j-1):(k+s)*j], _ = np.linalg.lu(A @ (A.T @ H[:, (k+s)*(j-2):(k+s)*(j-1)]))
-        Q, _ = np.linalg.qr(H, mode='reduced')
-        kn = i*(k+s)
-    else:
-        kn = Q.shape[1]
-
-    T = A.T @ Q
-    v, d = np.linalg.eig(T.T @ T)
-    ss = np.sqrt(np.diag(d))
-    S = spdiags(ss, 0, kn, kn)
-    u = np.linalg.solve(S, T @ v.T).T
-    V = u
-    x = slice(kn-k, kn)
-    S = ss[x]
-    U = Q @ v[:, x]
-    V = V[:, x]
-
-    return U, S, V, Q
-
-
-import numpy as np
-from scipy.sparse import spdiags, coo_matrix
-from scipy.sparse.linalg import svds
-
-def fastSVT_Q(M, tol, ran, i_reuse, q_reuse, delta):
-    m, n = M.shape
-    Omega = M != 0
-    Ns = np.sum(Omega)
-    
-    if delta is None:
-        delta = 1.2 * m * n / Ns
-    
-    xi, yi = np.where(Omega)
-    
-    tau = 5 * n
-    l = 5
-    i_max = 1000
-    PM = M.copy()
-    normPM2 = svds(PM, k=1)[0][0]
-    normPM = np.linalg.norm(PM, 'fro')
-    k0 = np.ceil(tau / (delta * normPM2))
-    Y0 = k0 * delta * PM
-
-    dec = 0
-    r = 0
-    p = 2
-    q = 0
-    err_before = 1000
-
-    for i in range(1, i_max + 1):
-        r_before = r
-        r += 1
-        
-        if i % 50 == 0:
-            delta /= 1.1
-        
-        if i > i_reuse and q < q_reuse:
-            U, S, Vt = rSVDBKIr(Y0, r, p, Q)
-            q += 1
-        else:
-            U, S, Vt = rSVDBKIr(Y0, r, p)
-            q = 0
-        
-        while S[0] > tau:
-            r += l
-            U, S, Vt = rSVDBKIr(Y0, r, p)
-        
-        j = 0
-        while S[j] <= tau:
-            j += 1
-        
-        r_max = r
-        r = max(r_max - j + 1, r_before)
-        x = slice(r_max - r, r_max)
-        S[x] = S[x] - tau
-        U[:, x] *= S[x]
-        
-        x_now = np.zeros(Ns)
-        for j in range(Ns):
-            temp = np.dot(U[xi[j], x], Vt[yi[j], x].T)
-            if temp < ran[0]:
-                x_now[j] = ran[0]
-            elif temp > ran[1]:
-                x_now[j] = ran[1]
-            else:
-                x_now[j] = temp
-        
-        X = coo_matrix((x_now, (xi, yi)), shape=(m, n)).tocsr()
-        PX = X - PM
-        err = np.linalg.norm(PX, 'fro') / normPM
-        
-        if err <= tol:
-            X = np.dot(U[:, x], Vt[:, x].T)
-            X[X < ran[0]] = ran[0]
-            X[X > ran[1]] = ran[1]
-            k = r
-            iters = i
-            break
-        
-        if err > err_before:
-            dec = 0
-            p += 1
-            q = 10
-        else:
-            if p <= 5:
-                dec = 0
-            else:
-                dec += 1
-                if dec == 10:
-                    p -= 1
-                    dec = 0
-        
-        err_before = err
-        print([i, r, err, p])
-        Y0 -= delta * PX
-    
-    return X, iters, k
-
-
 def svt_solve_inspired(A, r, c, rank, mask, delta = None, tau=None, max_iterations=1000, epsilon=1e-5):
 
     
@@ -685,11 +566,11 @@ def svt_solve_inspired(A, r, c, rank, mask, delta = None, tau=None, max_iteratio
     Y = mask * A
     
     m_rows, n_cols = np.shape(A)
-    
     if not tau:
-        tau = 5 * np.sum(A.shape) / 2
+        tau = np.sum(A.shape)/50
+        
     if not delta:
-        delta = 1.2 * r * c / np.sum(mask)
+        delta = 0.1 * r * c / np.sum(mask)
 
     # 1- Generating LS probability distributions used to sample rows and columns indices of matrix A
     tic = time.time()
@@ -710,7 +591,7 @@ def svt_solve_inspired(A, r, c, rank, mask, delta = None, tau=None, max_iteratio
     if c is None:
         c = 10
         
-        
+    tic = time.time()
     r_previous = r
     for k in range(100):
         
@@ -721,8 +602,16 @@ def svt_solve_inspired(A, r, c, rank, mask, delta = None, tau=None, max_iteratio
         if k == 0:
             X = np.zeros_like(A)
         else:
-
-            X, D = quantum_inspired_FRSVT(Y, row_norms, LS_prob_rows, LS_prob_columns, A_Frobenius, tau=tau, l=r, p=c)
+            
+            X, D = quantum_inspired_FRSVT(Y, row_norms, LS_prob_rows, LS_prob_columns, A_Frobenius, l = r,  p = r - 10, tau = tau)
+            #D_array = np.diag(D)
+            print('min, D', np.min(D))
+            while np.min(D) > 0:
+                r = r + 5
+                X, D = quantum_inspired_FRSVT(Y, row_norms, LS_prob_rows, LS_prob_columns, A_Frobenius, l = r, p = r - 10, tau = tau)
+                #D_array = np.diag(D)
+                print('min, D', np.min(D))
+                r_previous = np.count_nonzero(D)
             
         Y += delta * mask * (A - X)
         
@@ -739,7 +628,8 @@ def svt_solve_inspired(A, r, c, rank, mask, delta = None, tau=None, max_iteratio
     
         if recon_error < epsilon:
             break
-        
+    
+    toc = time.time()
     # draw reconstruction error with iterations
     plt.figure()
     print(rec_errors)

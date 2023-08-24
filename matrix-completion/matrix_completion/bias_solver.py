@@ -49,7 +49,12 @@ def biased_mf_solve(A, mask, k, mu, epsilon=1e-3, max_iterations=100):
 
     C_u = [np.diag(row) for row in mask]
     C_v = [np.diag(col) for col in mask.T]
-
+    
+    import time
+    
+    
+    tic = time.time()
+    
     prev_X = np.dot(U, V.T) + \
                      np.outer(beta, np.ones(n)) + \
                      np.outer(np.ones(m), gamma)
@@ -91,5 +96,10 @@ def biased_mf_solve(A, mask, k, mu, epsilon=1e-3, max_iterations=100):
             break
         prev_X = X
 
+        
+    toc = time.time()
+    
+    print("BMF Total Time:", toc - tic)
+    
     return X
 

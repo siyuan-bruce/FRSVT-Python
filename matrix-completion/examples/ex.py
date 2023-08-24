@@ -24,8 +24,8 @@ if __name__ == "__main__":
     argparse.add_argument("--m", default=1000, type=int)
     argparse.add_argument("--n", default=1000, type=int)
     argparse.add_argument("--k", default=5, type=int)
-    argparse.add_argument("--noise", default=0.1, type=float)
-    argparse.add_argument("--mask-prob", default=0.7, type=float)
+    argparse.add_argument("--noise", default=0.01, type=float)
+    argparse.add_argument("--mask-prob", default=0.5, type=float)
 
     args = argparse.parse_args()
 
@@ -35,25 +35,20 @@ if __name__ == "__main__":
     plot_image(R, "R.png")
     plot_image(mask, "mask.png")
 
-    print("== No Matrix Completion")
-    print("RMSE:", calc_unobserved_rmse(U, V, R * mask, mask))
+    # print("== No Matrix Completion")
+    # print("RMSE:", calc_unobserved_rmse(U, V, R * mask, mask))
 
-    R_hat = svt_solve_inspired(
-        R * mask, 30, 20, args.k, mask)
-    print("== quantum_inspired_svt_solve")
-    print("RMSE:", calc_unobserved_rmse(U, V, R_hat, mask))
-    plot_image(R_hat, "quantum_inspired_svt_solve.png")
     
-    R_hat = FRSVT_solve(
-        R * mask, 5, 5, args.k, mask)
-    print("== quantum_inspired_svt_solve")
-    print("RMSE:", calc_unobserved_rmse(U, V, R_hat, mask))
-    plot_image(R_hat, "quantum_inspired_svt_solve.png")
+    # R_hat = FRSVT_solve(
+    #     R * mask, 10, 5, args.k, mask)
+    # print("== quantum_inspired_svt_solve")
+    # print("RMSE:", calc_unobserved_rmse(U, V, R_hat, mask))
+    # plot_image(R_hat, "quantum_inspired_svt_solve.png")
 
-    R_hat = pmf_solve_inspired(R * mask, 50, 50, args.k, mask, 1e-2)
-    print("== pmf_solve_inspired")
-    print("RMSE:", calc_unobserved_rmse(U, V, R_hat, mask))
-    plot_image(R_hat, "pmf_solve.png")
+    # R_hat = pmf_solve_inspired(R * mask, 50, 50, args.k, mask, 1e-2)
+    # print("== pmf_solve_inspired")
+    # print("RMSE:", calc_unobserved_rmse(U, V, R_hat, mask))
+    # plot_image(R_hat, "pmf_solve.png")
 
     R_hat = pmf_solve(R * mask, mask, args.k, 1e-2)
     print("== PMF")
@@ -65,8 +60,19 @@ if __name__ == "__main__":
     print("RMSE:", calc_unobserved_rmse(U, V, R_hat, mask))
     plot_image(R_hat, "biased_mf_solve.png")
 
+    
     R_hat = svt_solve(R, mask)
     print("== SVT")
+    print("RMSE:", calc_unobserved_rmse(U, V, R_hat, mask))
+    plot_image(R_hat, "SVT_R_hat.png")
+    
+    R_hat = svt_solve(R, mask, algorithm = "inspired")
+    print("== Inspired_SVT")
+    print("RMSE:", calc_unobserved_rmse(U, V, R_hat, mask))
+    plot_image(R_hat, "SVT_R_hat.png")
+    
+    R_hat = svt_solve(R, mask, algorithm = "randomized")
+    print("== Randomized_SVT")
     print("RMSE:", calc_unobserved_rmse(U, V, R_hat, mask))
     plot_image(R_hat, "SVT_R_hat.png")
     

@@ -2,6 +2,9 @@ import numpy as np
 from numpy.linalg import norm
 import time
 
+import warnings
+
+warnings.filterwarnings('ignore')
 # seed
 np.random.seed(42)
 
@@ -70,11 +73,11 @@ def S_tau(D, tau):
     n = D.shape[0]
     S_D = np.zeros((n, n))
     for i in range(n):
-        S_D[i, i] = np.sign(D[i, i]) * max([abs(D[i, i] - tau), 0])
+        S_D[i, i] = np.sign(D[i, i]) * max([abs(D[i, i]) - tau, 0])
     return S_D
 
 def Helper(A, tau, l, p, Q):
-    for i in range(2):
+    for i in range(20):
         Q, R = np.linalg.qr(np.dot(A, np.dot(A.T, Q)))
         Q = Q[:, :R.shape[1]]
         R = R[:R.shape[1], :]
@@ -91,7 +94,6 @@ def Helper(A, tau, l, p, Q):
     return X, Q
 
 import numpy as np
-
 def PartialOrthogonalization(Q, Y):
     A = np.hstack((Q, Y))
     m, n = A.shape
@@ -108,8 +110,6 @@ def PartialOrthogonalization(Q, Y):
             
             if count > 5:
                 break
-            
-            
 
     Q = A
     R = np.zeros((n, n))
@@ -145,7 +145,7 @@ def FRSVT(A, tau=None, l=None, p=None):
     m, n = A.shape
     Omega = np.random.randn(n, l)
     Y = np.dot(A, Omega)
-    print(Y.shape)
+    #print(Y.shape)
     Q = QR_CP(Y)
     X, Q = Helper(A, tau, l, p, Q)
 
@@ -157,11 +157,13 @@ def FRSVT(A, tau=None, l=None, p=None):
     toc = time.time()
     print("Elapsed Time:", toc - tic)
 
+    X_real = np.real(X)
     # save image
     import matplotlib.pyplot as plt
-    plt.imshow(np.uint8(X), cmap='gray')
+    plt.imshow(np.uint8(X_real), cmap='gray')
     # save
     plt.savefig('Q.jpg')
+    return X_real
     
 
 import numpy as np
@@ -376,23 +378,29 @@ def quantum_inspired_FRSVT(A, tau=None, l=None, p=None):
     m, n = A.shape
     Y, rows, columns = sample_C(A, A.shape[0], A.shape[1], m, l, row_norms, LS_prob_rows, LS_prob_columns, A_Frobenius)
     
-    print(Y.shape)
     Q = QR_CP(Y)
     X, Q = Helper(A, tau, l, p, Q)
 
+    toc = time.time()
+    print("First Elapsed Time:", toc - tic)
+    
+    tic = time.time()
+    
     Y, rows, columns = sample_C(A, A.shape[0], A.shape[1], m, p, row_norms, LS_prob_rows, LS_prob_columns, A_Frobenius)
     
     Q = PartialOrthogonalization(Q, Y)
     X, Q = Helper(A, tau, l, p, Q)
 
     toc = time.time()
-    print("Elapsed Time:", toc - tic)
-
+    print("Second Elapsed Time:", toc - tic)
+    
+    X_real = np.real(X)
     # save image
     import matplotlib.pyplot as plt
-    plt.imshow(np.uint8(X), cmap='gray')
+    plt.imshow(np.uint8(X_real), cmap='gray')
     # save
     plt.savefig('Inspired_Q.jpg')
+    return X_real
 
     
 # A = cv2.imread('3.jpg', cv2.IMREAD_GRAYSCALE).astype(float)
@@ -404,6 +412,55 @@ def quantum_inspired_FRSVT(A, tau=None, l=None, p=None):
 
 A = cv2.imread('1.jpg', cv2.IMREAD_GRAYSCALE).astype(float)
 
-FRSVT(A, l = 10, p = 10)
+FRSVT(A, l = 1000, p = 10)
 
-quantum_inspired_FRSVT(A, l = 10, p = 10)
+quantum_inspired_FRSVT(A, l = 1000, p = 10)
+
+
+
+import numpy as np
+from sklearn.metrics import mean_squared_error
+from math import sqrt
+
+# Assuming FRSVT and quantum_inspired_FRSVT are functions defined elsewhere
+
+
+
+def gen_factorization(m, n, k):
+    """
+    Generate noisy data for m users and n movies with k latent factors.
+    Gaussian noise with variance sigma^2 is added to U V^T.
+    Effect is a matrix with a few large singular values and many close to zero.
+    """
+    U = np.random.randn(m, k)
+    V = np.random.randn(n, k)
+    R = np.dot(U, V.T)
+    return R
+
+
+# List of ranks of matrices to test
+ranks = [5, 10, 15, 20]
+
+# List of values for l and p to test
+l_values = [10, 15, 20, 25]
+p_values = [2, 4, 6, 8, 10]
+
+# Loop over all ranks
+for rank in ranks:
+    # Generate a random matrix of given rank
+    A = gen_factorization(5000, 1000, rank)
+
+    # Loop over all combinations of l and p values
+    for l in l_values:
+        for p in p_values:
+            # Run FRSVT function and compute RMSE
+            result_FRSVT = FRSVT(A, p = p, l = p)
+            
+            #print(result_FRSVT)
+            rmse_FRSVT = sqrt(mean_squared_error(A, result_FRSVT))
+            print(f"FRSVT RMSE for rank {rank} with l={l}, p={p}: {rmse_FRSVT}")
+
+            # Run quantum_inspired_FRSVT function and compute RMSE
+            result_qi_FRSVT = quantum_inspired_FRSVT(A, p = p, l = l)
+            rmse_qi_FRSVT = sqrt(mean_squared_error(A, result_qi_FRSVT))
+            print(f"quantum_inspired_FRSVT RMSE for rank {rank} with l={l}, p={p}: {rmse_qi_FRSVT}")

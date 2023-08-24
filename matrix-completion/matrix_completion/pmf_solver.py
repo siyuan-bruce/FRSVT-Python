@@ -240,7 +240,12 @@ def pmf_solve(A, mask, k, mu, epsilon=1e-3, max_iterations=100):
     C_v = [np.diag(col) for col in mask.T]
 
     prev_X = np.dot(U, V.T)
-
+    
+    import time
+    
+    
+    tic = time.time()
+    
     for _ in range(max_iterations):
 
         for i in range(m):
@@ -256,13 +261,17 @@ def pmf_solve(A, mask, k, mu, epsilon=1e-3, max_iterations=100):
         X = np.dot(U, V.T)
 
         mean_diff = np.linalg.norm(X - prev_X) / m / n
-        print(mean_diff)
+        #print(mean_diff)
         if _ % 1 == 0:
             logger.info("Iteration: %i; Mean diff: %.4f" % (_ + 1, mean_diff))
         if mean_diff < epsilon:
             break
         prev_X = X
-
+    
+    toc = time.time()
+    
+    print("PMF Total Time:", toc - tic)
+    
     return X
 
 

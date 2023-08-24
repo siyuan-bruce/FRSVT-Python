@@ -2,7 +2,7 @@ from __future__ import division
 import numpy as np
 import logging
 
-from sklearn.utils.extmath import randomized_svd, svd_flip
+from sklearn.utils.extmath import randomized_svd, svd_flip, inspired_randomized_svd
 from scipy.sparse.linalg import svds
 from numpy.linalg import norm
 
@@ -187,7 +187,10 @@ def uvl_vector(l, A, r, w, rows, sigma, row_norms, A_Frobenius):
 def _my_svd(M, k, algorithm):
     if algorithm == 'randomized':
         (U, S, V) = randomized_svd(
-            M, n_components=min(k, M.shape[1]-1), n_oversamples=20)
+            M, n_components=min(k, M.shape[1]-1), n_oversamples=5)
+    elif algorithm == 'inspired':
+        (U, S, V) = inspired_randomized_svd(
+            M, n_components=min(k, M.shape[1]-1), n_oversamples=5)
     elif algorithm == 'arpack':
         (U, S, V) = svds(M, k=min(k, min(M.shape)-1))
         S = S[::-1]
@@ -204,7 +207,7 @@ def svt_solve(
         epsilon=1e-2,
         rel_improvement=-0.01,
         max_iterations=1000,
-        algorithm='arpack'):
+        algorithm='randomized'):
     """
     Solve using iterative singular value thresholding.
 
@@ -241,7 +244,7 @@ def svt_solve(
         completed matrix
     """
     logger = logging.getLogger(__name__)
-    if algorithm not in ['randomized', 'arpack']:
+    if algorithm not in ['randomized', 'arpack', 'inspired']:
         raise ValueError("unknown algorithm %r" % algorithm)
     Y = np.zeros_like(A)
 
@@ -251,29 +254,38 @@ def svt_solve(
         delta = 1.2 * np.prod(A.shape) / np.sum(mask)
 
     r_previous = 0
+    import time
+    
+    
+    tic = time.time()
 
     for k in range(max_iterations):
         if k == 0:
             X = np.zeros_like(A)
         else:
             sk = r_previous + 1
+            print(sk)
             (U, S, V) = _my_svd(Y, sk, algorithm)
             while np.min(S) >= tau:
                 sk = sk + 5
                 (U, S, V) = _my_svd(Y, sk, algorithm)
             shrink_S = np.maximum(S - tau, 0)
+            #print(shrink_S)
             r_previous = np.count_nonzero(shrink_S)
             diag_shrink_S = np.diag(shrink_S)
             X = np.linalg.multi_dot([U, diag_shrink_S, V])
         Y += delta * mask * (A - X)
-        print(Y)
+        #print(Y)
 
         recon_error = np.linalg.norm(mask * (X - A)) / np.linalg.norm(mask * A)
-        print(recon_error)
+        print("recon_error: ",recon_error)
         if k % 1 == 0:
             logger.info("Iteration: %i; Rel error: %.4f" % (k + 1, recon_error))
         if recon_error < epsilon:
             break
-
+    
+    toc = time.time()
+    
+    print("SVT Total Time:", toc - tic)
     return X
 
