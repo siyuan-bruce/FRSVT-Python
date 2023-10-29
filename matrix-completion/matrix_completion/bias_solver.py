@@ -2,7 +2,7 @@ import numpy as np
 import logging
 
 
-def biased_mf_solve(A, mask, k, mu, epsilon=1e-3, max_iterations=100):
+def biased_mf_solve(A, mask, k, mu, epsilon=1e-2, max_iterations=1000):
     """
     Solve biased probabilistic matrix factorization via alternating least
     squares.

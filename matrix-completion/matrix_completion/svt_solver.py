@@ -204,10 +204,10 @@ def svt_solve(
         mask, 
         tau=None, 
         delta=None, 
-        epsilon=1e-2,
+        epsilon=1e-1,
         rel_improvement=-0.01,
-        max_iterations=1000,
-        algorithm='randomized'):
+        max_iterations=100,
+        algorithm='arpack'):
     """
     Solve using iterative singular value thresholding.
 
@@ -249,12 +249,14 @@ def svt_solve(
     Y = np.zeros_like(A)
 
     if not tau:
-        tau = 5 * np.sum(A.shape) / 2
+        tau = np.sum(A.shape) / 10
     if not delta:
-        delta = 1.2 * np.prod(A.shape) / np.sum(mask)
+        delta = np.prod(A.shape) / np.sum(mask)
 
     r_previous = 0
     import time
+    
+        
     
     
     tic = time.time()
@@ -264,7 +266,7 @@ def svt_solve(
             X = np.zeros_like(A)
         else:
             sk = r_previous + 1
-            print(sk)
+            #print(sk)
             (U, S, V) = _my_svd(Y, sk, algorithm)
             while np.min(S) >= tau:
                 sk = sk + 5
@@ -272,13 +274,19 @@ def svt_solve(
             shrink_S = np.maximum(S - tau, 0)
             #print(shrink_S)
             r_previous = np.count_nonzero(shrink_S)
+            
+            
+            #print(shrink_S)
             diag_shrink_S = np.diag(shrink_S)
             X = np.linalg.multi_dot([U, diag_shrink_S, V])
+            #print(S)
+            #print(tau)
         Y += delta * mask * (A - X)
-        #print(Y)
+        
+        
 
         recon_error = np.linalg.norm(mask * (X - A)) / np.linalg.norm(mask * A)
-        print("recon_error: ",recon_error)
+        # print("recon_error: ",recon_error)
         if k % 1 == 0:
             logger.info("Iteration: %i; Rel error: %.4f" % (k + 1, recon_error))
         if recon_error < epsilon:

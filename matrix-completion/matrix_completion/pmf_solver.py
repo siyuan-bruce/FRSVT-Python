@@ -196,7 +196,7 @@ def uvl_vector(l, A, r, w, rows, sigma, row_norms, A_Frobenius):
 
 
 
-def pmf_solve(A, mask, k, mu, epsilon=1e-3, max_iterations=100):
+def pmf_solve(A, mask, k, mu, epsilon=1e-2, max_iterations=1000):
     """
     Solve probabilistic matrix factorization using alternating least squares.
 

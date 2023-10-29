@@ -22,12 +22,22 @@ def gen_factorization_without_noise(m, n, k):
 
 
 def gen_factorization_with_noise(m, n, k, sigma):
-    """
-    Generate noisy data for m users and n movies with k latent factors.
-    Gaussian noise with variance sigma^2 is added to U V^T.
-    Effect is a matrix with a few large singular values and many close to zero.
-    """
-    U = np.random.randn(m, k)
-    V = np.random.randn(n, k)
-    R = np.random.randn(m, n) * sigma + np.dot(U, V.T)
+    
+    # Create an array of norms in a random increasing way
+    norms = np.cumsum(np.abs(np.random.randn(k))) * 10
+    
+    # Randomize the order of the norms
+    np.random.shuffle(norms)
+    
+    # Generate a random matrix and use QR decomposition to get a matrix with full column rank
+    U = np.linalg.qr(np.random.randn(m, k))[0]
+    
+    # Generate another random matrix, use QR decomposition to get a matrix with full column rank,
+    # and then scale each column
+    V = np.linalg.qr(np.random.randn(n, k))[0]
+    for i in range(k):
+        V[:, i] *= norms[i]
+    
+    # Compute R
+    R = np.dot(U, V.T) + np.random.randn(m, n) * sigma
     return U, V, R

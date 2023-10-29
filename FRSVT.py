@@ -143,26 +143,42 @@ def FRSVT(A, tau=None, l=None, p=None):
         A = A.T
 
     m, n = A.shape
+    
+    tic = time.time()
     Omega = np.random.randn(n, l)
     Y = np.dot(A, Omega)
-    #print(Y.shape)
+    #toc = time.time()
+    #print("FRSVT Sampling Elapsed Time 1:", toc - tic)
+    
+    #tic = time.time()
     Q = QR_CP(Y)
+    
+    #toc = time.time()
+    #print("FRSVT QRCP Elapsed Time:", toc - tic)
+    #tic = time.time()
+    
     X, Q = Helper(A, tau, l, p, Q)
 
+    #tic = time.time()
+    
     Omega = np.random.randn(n, p)
     Y = np.dot(A, Omega)
+    
     Q = PartialOrthogonalization(Q, Y)
     X, Q = Helper(A, tau, l, p, Q)
-
+    
     toc = time.time()
-    print("Elapsed Time:", toc - tic)
+    print("FRSVT Time:", toc - tic)
+
+    #toc = time.time()
+    #print("Elapsed Time:", toc - tic)
 
     X_real = np.real(X)
     # save image
     import matplotlib.pyplot as plt
     plt.imshow(np.uint8(X_real), cmap='gray')
     # save
-    plt.savefig('Q.jpg')
+    plt.savefig('FRSVT.jpg')
     return X_real
     
 
@@ -285,6 +301,38 @@ def ls_probs(m, n, A):
     return row_norms, LS_prob_rows, LS_prob_columns, A_Frobenius
 
 
+
+def ls_probs_columns(m, n, A):
+
+    r"""Function generating the length-squared (LS) probability distributions for sampling matrix A.
+
+    Args:
+        m (int): number of rows of matrix A
+        n (int): row n of columns of matrix A
+        A (array[complex]): most general case is a rectangular complex matrix
+
+    Returns:
+        tuple: Tuple containing the row-norms, LS probability distributions for rows and columns,
+        and Frobenius norm.
+    """
+
+    # populates array with the row-norms squared of matrix A
+    column_norms = np.zeros(n)
+    for i in range(n):
+        column_norms[i] = np.abs(la.norm(A[:, i]))**2
+
+    # Frobenius norm of A
+    A_Frobenius = np.sqrt(np.sum(column_norms))
+
+    LS_prob_columns = np.zeros(n)
+
+    # normalized length-square row probability distribution
+    for i in range(n):
+        LS_prob_columns[i] = column_norms[i] / A_Frobenius**2
+
+    return column_norms, LS_prob_columns, A_Frobenius
+
+
 def sample_C(A, m, n, r, c, row_norms, LS_prob_rows, LS_prob_columns, A_Frobenius):
 
     r"""Function used to generate matrix C by performing LS sampling of rows and columns of matrix A.
@@ -353,6 +401,57 @@ def sample_C(A, m, n, r, c, row_norms, LS_prob_rows, LS_prob_columns, A_Frobeniu
     return C, rows, columns
 
 
+
+def sample_C_columns(A, m, n, c, column_norms, LS_prob_columns, A_Frobenius):
+
+    r"""Function used to generate matrix C by performing LS sampling of rows and columns of matrix A.
+
+    Args:
+        A (array[complex]): rectangular, in general, complex matrix
+        m (int): number of rows of matrix A
+        n (int): number of columns of matrix A
+        r (int): number of sampled rows
+        c (int): number of sampled columns
+        row_norms (array[float]): norm of the rows of matrix A
+        LS_prob_rows (array[float]): row LS probability distribution of matrix A
+        LS_prob_columns (array[float]): column LS probability distribution of matrix A
+        A_Frobenius (float): Frobenius norm of matrix A
+
+    Returns:
+        tuple: Tuple containing the singular values (sigma), left- (w) and right-singular vectors (vh) of matrix C,
+        the sampled rows (rows), the column LS prob. distribution (LS_prob_columns_R) of matrix R and split running
+        times for the FKV algorithm.
+    """
+
+    tic = time.time()
+    # sample row indices from row length_square distribution
+    columns = np.random.choice(n, c, replace=True, p=LS_prob_columns)
+
+    #columns = np.zeros(c, dtype=int)
+    # sample column indices
+    i = np.random.choice(columns, replace=True)
+
+    toc = time.time()
+    rt_sampling_C = toc - tic
+
+    # building the lenght-squared distribution to sample columns from matrix R
+    R_row = np.zeros(n)
+
+    tic = time.time()
+    # creates empty array for R and C matrices. We treat R as r x c here, since we only need columns later
+    C_Columns = np.zeros((m, c))
+
+    # populates array for matrix R with the submatrix of A defined by sampled rows/columns
+    for s in range(c):
+        C_Columns[:, s] = A[:, columns[s]]
+
+        # renormalize each row of R
+        C_Columns[:,s] = C_Columns[:,s] * A_Frobenius / (np.sqrt(c) * np.sqrt(column_norms[columns[s]]))
+
+    return C_Columns, columns
+
+
+
 def quantum_inspired_FRSVT(A, tau=None, l=None, p=None):
     import time
     
@@ -373,27 +472,22 @@ def quantum_inspired_FRSVT(A, tau=None, l=None, p=None):
 
     row_norms, LS_prob_rows, LS_prob_columns, A_Frobenius =  ls_probs(A.shape[0], A.shape[1], A)
 
-    tic = time.time()
-
     m, n = A.shape
+    
+    tic = time.time()
     Y, rows, columns = sample_C(A, A.shape[0], A.shape[1], m, l, row_norms, LS_prob_rows, LS_prob_columns, A_Frobenius)
     
     Q = QR_CP(Y)
     X, Q = Helper(A, tau, l, p, Q)
 
-    toc = time.time()
-    print("First Elapsed Time:", toc - tic)
-    
-    tic = time.time()
-    
     Y, rows, columns = sample_C(A, A.shape[0], A.shape[1], m, p, row_norms, LS_prob_rows, LS_prob_columns, A_Frobenius)
-    
+   
     Q = PartialOrthogonalization(Q, Y)
     X, Q = Helper(A, tau, l, p, Q)
-
-    toc = time.time()
-    print("Second Elapsed Time:", toc - tic)
     
+    toc = time.time()
+    print("QISVT Elapsed Time:", toc - tic)
+
     X_real = np.real(X)
     # save image
     import matplotlib.pyplot as plt
@@ -402,7 +496,64 @@ def quantum_inspired_FRSVT(A, tau=None, l=None, p=None):
     plt.savefig('Inspired_Q.jpg')
     return X_real
 
+
+
+def quantum_inspired_FRSVT_columns(A, tau=None, l=None, p=None):
+    import time
     
+    if A is None:
+        # Read an image if A is not provided
+        import cv2
+        A = cv2.imread('1.jpg', cv2.IMREAD_GRAYSCALE).astype(float)
+
+    if tau is None:
+        tau = 1 / np.linalg.norm(A, 2)
+    if l is None:
+        l = 20
+    if p is None:
+        p = 10
+
+    if A.shape[0] < A.shape[1]:
+        A = A.T
+
+    column_norms, LS_prob_columns, A_Frobenius = ls_probs_columns(A.shape[0], A.shape[1], A)
+    #print(LS_prob_columns)
+    m, n = A.shape
+   
+    tic = time.time()
+    
+    Y, columns = sample_C_columns(A, m, n, l, column_norms, LS_prob_columns, A_Frobenius)
+
+    Q = QR_CP(Y)
+    
+    #toc = time.time()
+    #print("Inspired QRCP Elapsed Time:", toc - tic)
+    #tic = time.time()
+    
+    X, Q = Helper(A, tau, l, p, Q)
+
+    #toc = time.time()
+    #print("Helper Elapsed Time:", toc - tic)
+    
+    #tic = time.time()
+    
+    Y, columns = sample_C_columns(A, m, n, p, column_norms, LS_prob_columns, A_Frobenius)
+    
+    Q = PartialOrthogonalization(Q, Y)
+    X, Q = Helper(A, tau, l, p, Q)
+
+    toc = time.time()
+    print("QISVT Time:", toc - tic)
+    
+    X_real = np.real(X)
+    # save image
+    import matplotlib.pyplot as plt
+    plt.imshow(np.uint8(X_real), cmap='gray')
+    # save
+    plt.savefig('Inspired_Q_columns.jpg')
+    return X_real
+
+
 # A = cv2.imread('3.jpg', cv2.IMREAD_GRAYSCALE).astype(float)
 
 # FRSVT(A, l = 50, p = 20)
@@ -412,10 +563,13 @@ def quantum_inspired_FRSVT(A, tau=None, l=None, p=None):
 
 A = cv2.imread('1.jpg', cv2.IMREAD_GRAYSCALE).astype(float)
 
-FRSVT(A, l = 1000, p = 10)
 
-quantum_inspired_FRSVT(A, l = 1000, p = 10)
+FRSVT(A, l = 20, p = 10)
 
+quantum_inspired_FRSVT(A, l = 20, p = 10)
+
+
+quantum_inspired_FRSVT_columns(A, l = 20, p = 10)
 
 
 import numpy as np
@@ -425,42 +579,123 @@ from math import sqrt
 # Assuming FRSVT and quantum_inspired_FRSVT are functions defined elsewhere
 
 
-
 def gen_factorization(m, n, k):
     """
     Generate noisy data for m users and n movies with k latent factors.
     Gaussian noise with variance sigma^2 is added to U V^T.
     Effect is a matrix with a few large singular values and many close to zero.
     """
-    U = np.random.randn(m, k)
-    V = np.random.randn(n, k)
-    R = np.dot(U, V.T)
+    
+    # Create an array of norms in a random increasing way
+    norms = np.cumsum(np.abs(np.random.randn(k)))
+    
+    # Randomize the order of the norms
+    np.random.shuffle(norms)
+    
+    # Generate a random matrix and use QR decomposition to get a matrix with full column rank
+    U = np.linalg.qr(np.random.randn(m, k))[0]
+    
+    # Generate another random matrix, use QR decomposition to get a matrix with full column rank,
+    # and then scale each column
+    V = np.linalg.qr(np.random.randn(n, k))[0]
+    for i in range(k):
+        V[:, i] *= norms[i]
+    
+    # Compute R
+    R = np.dot(U, V.T) + np.random.randn(m, n) * 0.01
+    
     return R
 
 
+def TestSVD(A, k, tau = None):
+    #A = cv2.imread('1.jpg', cv2.IMREAD_GRAYSCALE).astype(float)
+    if tau is None:
+        tau = 1 / np.linalg.norm(A, 2)
+    I = A.copy()
+    plt.imshow(np.uint8(A), cmap='gray')
+    plt.show()
+
+    tic = time.time()
+
+    S, V, D = np.linalg.svd(I)
+    
+    D = S_tau(D, tau)
+
+    toc = time.time()
+    print("SVD Elapsed Time:", toc - tic)
+    plt.imshow(np.uint8(I), cmap='gray')
+    plt.show()
+
+    k = 10
+    reconstructed_image = np.dot(np.dot(S[:, :k], np.diag(V[:k])), D[:, :k].T)
+    
+    return reconstructed_image
+
+
+
+def SVT(A, tau=None):
+    import time
+    
+    if A is None:
+        # Read an image if A is not provided
+        import cv2
+        A = cv2.imread('1.jpg', cv2.IMREAD_GRAYSCALE).astype(float)
+
+    if tau is None:
+        tau = 1 / np.linalg.norm(A, 2)
+
+    if A.shape[0] < A.shape[1]:
+        A = A.T
+
+    m, n = A.shape
+   
+    tic = time.time()
+    Y = A
+    
+    Q = QR_CP(Y)
+    
+    X, Q = Helper(A, tau, l, p, Q)
+
+    #Q = PartialOrthogonalization(Q, Y)
+    
+    #X, Q = Helper(A, tau, l, p, Q)
+
+    toc = time.time()
+    print("SVT Time:", toc - tic)
+    X_real = np.real(X)
+    return X_real
+
 # List of ranks of matrices to test
-ranks = [5, 10, 15, 20]
+ranks = [5, 8, 10]
 
 # List of values for l and p to test
-l_values = [10, 15, 20, 25]
-p_values = [2, 4, 6, 8, 10]
+l_values = [5, 10, 15, 20]
+p_values = [2,2]
 
 # Loop over all ranks
 for rank in ranks:
     # Generate a random matrix of given rank
-    A = gen_factorization(5000, 1000, rank)
+    A = gen_factorization(2000, 2000, rank)
 
     # Loop over all combinations of l and p values
     for l in l_values:
         for p in p_values:
             # Run FRSVT function and compute RMSE
-            result_FRSVT = FRSVT(A, p = p, l = p)
-            
-            #print(result_FRSVT)
+            result_FRSVT = FRSVT(A, p = p, l = l)
             rmse_FRSVT = sqrt(mean_squared_error(A, result_FRSVT))
             print(f"FRSVT RMSE for rank {rank} with l={l}, p={p}: {rmse_FRSVT}")
 
             # Run quantum_inspired_FRSVT function and compute RMSE
             result_qi_FRSVT = quantum_inspired_FRSVT(A, p = p, l = l)
             rmse_qi_FRSVT = sqrt(mean_squared_error(A, result_qi_FRSVT))
-            print(f"quantum_inspired_FRSVT RMSE for rank {rank} with l={l}, p={p}: {rmse_qi_FRSVT}")
+            print(f"QISVT RMSE for rank {rank} with l={l}, p={p}: {rmse_qi_FRSVT}")
+            
+            # Run FRSVT function and compute RMSE
+            TestSVD_result = TestSVD(A, k = ranks * 2)
+            rmse_SVD = sqrt(mean_squared_error(A, TestSVD_result))
+            print(f"SVD RMSE for rank {rank} with l={l}, p={p}: {rmse_SVD}")
+                        
+            # Run FRSVT function and compute RMSE
+            # SVT_result = SVT(A)
+            # rmse_SVT = sqrt(mean_squared_error(A, SVT_result))
+            # print(f"SVT RMSE for rank {rank} with l={l}, p={p}: {rmse_SVT}")
