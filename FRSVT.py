@@ -168,7 +168,7 @@ def FRSVT(A, tau=None, l=None, p=None):
     X, Q = Helper(A, tau, l, p, Q)
     
     toc = time.time()
-    print("FRSVT Time:", toc - tic)
+    #print("FRSVT Time:", toc - tic)
 
     #toc = time.time()
     #print("Elapsed Time:", toc - tic)
@@ -179,7 +179,7 @@ def FRSVT(A, tau=None, l=None, p=None):
     plt.imshow(np.uint8(X_real), cmap='gray')
     # save
     plt.savefig('FRSVT.jpg')
-    return X_real
+    return X_real, toc - tic
     
 
 import numpy as np
@@ -205,6 +205,7 @@ def TestSVD():
     reconstructed_image = np.dot(np.dot(S[:, :k], np.diag(V[:k])), D[:, :k].T)
     plt.imshow(np.uint8(reconstructed_image), cmap='gray')
     plt.show()
+    
 
 # Call the test function
 TestSVD()
@@ -486,7 +487,7 @@ def quantum_inspired_FRSVT(A, tau=None, l=None, p=None):
     X, Q = Helper(A, tau, l, p, Q)
     
     toc = time.time()
-    print("QISVT Elapsed Time:", toc - tic)
+   # print("QISVT Elapsed Time:", toc - tic)
 
     X_real = np.real(X)
     # save image
@@ -494,7 +495,7 @@ def quantum_inspired_FRSVT(A, tau=None, l=None, p=None):
     plt.imshow(np.uint8(X_real), cmap='gray')
     # save
     plt.savefig('Inspired_Q.jpg')
-    return X_real
+    return X_real, toc - tic
 
 
 
@@ -543,7 +544,7 @@ def quantum_inspired_FRSVT_columns(A, tau=None, l=None, p=None):
     X, Q = Helper(A, tau, l, p, Q)
 
     toc = time.time()
-    print("QISVT Time:", toc - tic)
+    #print("QISVT Time:", toc - tic)
     
     X_real = np.real(X)
     # save image
@@ -622,14 +623,14 @@ def TestSVD(A, k, tau = None):
     D = S_tau(D, tau)
 
     toc = time.time()
-    print("SVD Elapsed Time:", toc - tic)
+    #print("SVD Elapsed Time:", toc - tic)
     plt.imshow(np.uint8(I), cmap='gray')
     plt.show()
 
     k = 10
     reconstructed_image = np.dot(np.dot(S[:, :k], np.diag(V[:k])), D[:, :k].T)
     
-    return reconstructed_image
+    return reconstructed_image, toc - tic
 
 
 
@@ -661,41 +662,75 @@ def SVT(A, tau=None):
     #X, Q = Helper(A, tau, l, p, Q)
 
     toc = time.time()
-    print("SVT Time:", toc - tic)
+    #print("SVT Time:", toc - tic)
     X_real = np.real(X)
     return X_real
 
-# List of ranks of matrices to test
-ranks = [5, 8, 10]
 
-# List of values for l and p to test
-l_values = [5, 10, 15, 20]
-p_values = [2,2]
+times = 10
 
-# Loop over all ranks
-for rank in ranks:
-    # Generate a random matrix of given rank
-    A = gen_factorization(2000, 2000, rank)
-
-    # Loop over all combinations of l and p values
-    for l in l_values:
-        for p in p_values:
-            # Run FRSVT function and compute RMSE
-            result_FRSVT = FRSVT(A, p = p, l = l)
-            rmse_FRSVT = sqrt(mean_squared_error(A, result_FRSVT))
-            print(f"FRSVT RMSE for rank {rank} with l={l}, p={p}: {rmse_FRSVT}")
-
-            # Run quantum_inspired_FRSVT function and compute RMSE
-            result_qi_FRSVT = quantum_inspired_FRSVT(A, p = p, l = l)
-            rmse_qi_FRSVT = sqrt(mean_squared_error(A, result_qi_FRSVT))
-            print(f"QISVT RMSE for rank {rank} with l={l}, p={p}: {rmse_qi_FRSVT}")
-            
-            # Run FRSVT function and compute RMSE
-            TestSVD_result = TestSVD(A, k = ranks * 2)
-            rmse_SVD = sqrt(mean_squared_error(A, TestSVD_result))
-            print(f"SVD RMSE for rank {rank} with l={l}, p={p}: {rmse_SVD}")
-                        
-            # Run FRSVT function and compute RMSE
-            # SVT_result = SVT(A)
-            # rmse_SVT = sqrt(mean_squared_error(A, SVT_result))
-            # print(f"SVT RMSE for rank {rank} with l={l}, p={p}: {rmse_SVT}")
+for experiment in range(4, times):
+    
+    results_list = []
+    
+    # List of ranks of matrices to test
+    ranks = [3, 5, 7, 9, 11]
+    
+    # List of values for l and p to test
+    l_values = [5, 10, 15, 20]
+    p_values = [2, 2]
+    
+    # Loop over all ranks
+    for rank in ranks:
+        # Generate a random matrix of given rank
+        A = gen_factorization(2000, 2000, rank)
+    
+        # Loop over all combinations of l and p values
+        for l in l_values:
+            for p in p_values:
+                # Run FRSVT function and compute RMSE
+                result_FRSVT, elapsed_time = FRSVT(A, p = p, l = l)
+                rmse_FRSVT = sqrt(mean_squared_error(A, result_FRSVT))
+                
+                results_list.append(
+                    {"method": "FRSVT", 
+                     "rank": rank,
+                     "l": l,
+                     "p": p,
+                     "rmse": rmse_FRSVT,
+                     "time": elapsed_time}
+                    )
+                #results_list.append(f"FRSVT RMSE for rank {rank} with l={l}, p={p}: {rmse_FRSVT}")
+    
+                # Run quantum_inspired_FRSVT function and compute RMSE
+                result_qi_FRSVT, elapsed_time = quantum_inspired_FRSVT(A, p = p, l = l)
+                rmse_qi_FRSVT = sqrt(mean_squared_error(A, result_qi_FRSVT))
+                
+                results_list.append(
+                    {"method": "QISVT", 
+                     "rank": rank,
+                     "l": l,
+                     "p": p,
+                     "rmse": rmse_qi_FRSVT,
+                     "time": elapsed_time}
+                    )
+                
+                #results_list.append(f"QISVT RMSE for rank {rank} with l={l}, p={p}: {rmse_qi_FRSVT}")
+                
+                # Run FRSVT function and compute RMSE
+                TestSVD_result, elapsed_time = TestSVD(A, k = ranks * 2)
+                rmse_SVD = sqrt(mean_squared_error(A, TestSVD_result))
+                
+                results_list.append(
+                    {"method": "SVT", 
+                     "rank": rank,
+                     "l": l,
+                     "p": p,
+                     "rmse": rmse_SVD,
+                     "time": elapsed_time}
+                    )
+                
+    
+    import pandas as pd
+    
+    pd.DataFrame(results_list).to_csv("plot/comparison_results_SVT_experiment" + str(experiment) + ".csv")
